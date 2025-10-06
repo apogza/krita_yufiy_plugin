@@ -66,7 +66,7 @@
       </widget>
      </item>
      <item>
-      <widget class="QLineEdit" name="usernameLineEdit">
+      <widget class="QLineEdit" name="emailLineEdit">
        <property name="minimumSize">
         <size>
          <width>300</width>
