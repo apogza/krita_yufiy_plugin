@@ -6,11 +6,8 @@ try:
     if int(qVersion().split('.')[0]) == 5:
         raise
     from PyQt6 import uic, QtCore
-    from PyQt6 import QtNetwork
 except:
     from PyQt5 import uic, QtCore
-    from PyQt5 import QtNetwork
-
 
 class YuifinderForm(QDialog):
     
