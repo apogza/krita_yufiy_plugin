@@ -1,7 +1,7 @@
 import os
 import json
 
-from wacom_yuify.constants import base_url, auth_file
+from wacom_yuify.constants import base_url
 
 try:
     if int(qVersion().split('.')[0]) == 5:
@@ -44,8 +44,9 @@ class NetworkHelper(QObject):
         self.main_token = ""
         self.refresh_token = ""
 
-        if os.path.exists(auth_file):
-            os.remove(auth_file)
+        self.settings.remove("mainToken")
+        self.settings.remove("refreshToken")
+        self.settings.remove("email")
 
     def is_authenticated(self):
         return self.main_token != ""
