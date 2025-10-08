@@ -3,7 +3,9 @@ from krita import *
 from wacom_yuify.login_form import LoginForm
 from wacom_yuify.yuifinder_form import YuifinderForm
 from wacom_yuify.logout_form import LogoutForm
+from wacom_yuify.export_form import ExportForm
 from wacom_yuify.network_helper import NetworkHelper
+
 
 class WacomYuify(Extension):
 
@@ -18,14 +20,33 @@ class WacomYuify(Extension):
 
     def login(self):
         if self.network_helper.is_authenticated():
-            self.logoutForm = LogoutForm(self.network_helper, None)
-            self.logoutForm.exec()
+            logout_form = LogoutForm(self.network_helper, None)
+            logout_form.exec()
         else:
-            self.loginForm = LoginForm(self.network_helper, None)
-            self.loginForm.exec()
+            login_form = LoginForm(self.network_helper, None)
+            login_form.exec()
 
     def export(self):
-        pass
+        krita = Krita.instance()
+
+        active_document = krita.activeDocument()
+
+        if not active_document:
+            msg_box = QMessageBox()
+            msg_box.setText("Please open a document")
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.exec()
+            return
+
+        if self.network_helper.is_authenticated():
+            export_form = ExportForm(self.network_helper, None)
+            export_form.exec()
+        else:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText("Please authenticate before exporting a document")
+            msg_box.exec()
+
 
     def yufinder(self):
         self.yufinderForm = YuifinderForm(self.network_helper, None)
