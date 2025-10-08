@@ -19,6 +19,9 @@ class LogoutForm(QDialog):
         self.centralWidget.emailLabel.setText(self.network_helper.get_email())
         self.centralWidget.logoutButton.clicked.connect(self.logout)
 
+        logo = QPixmap(os.path.join(os.path.dirname(os.path.realpath(__file__)),'yuify-icon.png'))
+        self.centralWidget.yuifyLogo.setPixmap(logo)
+
         layout = QVBoxLayout()
         layout.addWidget(self.centralWidget)
         self.setLayout(layout)
