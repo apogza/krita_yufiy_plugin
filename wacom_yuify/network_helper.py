@@ -7,10 +7,10 @@ try:
     if int(qVersion().split('.')[0]) == 5:
         raise
     from PyQt6 import QtNetwork
-    from PyQt6.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice
+    from PyQt6.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice, QSettings
 except:
     from PyQt5 import QtNetwork
-    from PyQt5.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice
+    from PyQt5.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice, QSettings
 
 class NetworkHelper(QObject):
     login_success = pyqtSignal()
@@ -23,6 +23,8 @@ class NetworkHelper(QObject):
         self.main_token = ""
         self.refresh_token = ""
         self.email = ""
+
+        self.settings = QSettings("Wacom", "Krita Yuify Plugin")
 
         self.nam = QtNetwork.QNetworkAccessManager()
         self.load_tokens()
@@ -76,26 +78,21 @@ class NetworkHelper(QObject):
                 self.logout()
 
     def load_tokens(self):
-        if os.path.exists(auth_file):
-            with open(auth_file, "r") as f:
-                auth = json.load(f)                
-                self.main_token = auth["mainToken"]
-                self.refresh_token = auth["refreshToken"]
-                self.email = auth["email"]
-        
+
+        self.main_token = self.settings.value("mainToken", "")
+        self.refresh_token = self.settings.value("refreshToken", "")
+        self.email = self.settings.value("email", "")
+
+        if self.refresh_token != "":                  
             self.refresh_tokens()
 
     def get_email(self):
         return self.email
     
     def save_tokens(self, email, main_token, refresh_token):
-        auth = {}
-        auth["email"] = email
-        auth["mainToken"] = main_token
-        auth["refreshToken"] = refresh_token        
-
-        with open(auth_file, "w") as f:
-            json.dump(auth, f)                        
+        self.settings.setValue("mainToken", self.main_token)
+        self.settings.setValue("refreshToken", self.refresh_token)
+        self.settings.setValue("email", self.email)
         
     def refresh_tokens(self):
         url = QUrl("%s/api/isv/users/refresh-token" % base_url)
