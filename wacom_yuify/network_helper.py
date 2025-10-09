@@ -7,16 +7,22 @@ try:
     if int(qVersion().split('.')[0]) == 5:
         raise
     from PyQt6 import QtNetwork
-    from PyQt6.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice, QSettings
+    from PyQt6.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice, QSettings, QTimer
 except:
     from PyQt5 import QtNetwork
-    from PyQt5.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice, QSettings
+    from PyQt5.QtCore import pyqtSignal, QObject, QUrl, QByteArray, QFileInfo, QFile, QIODevice, QSettings, QTimer
 
 class NetworkHelper(QObject):
     login_success = pyqtSignal()
     login_fail = pyqtSignal(object)    
     profile_incomplete = pyqtSignal(object)
     yuifinder_search_result = pyqtSignal(bool, object)
+    artwork_container_success = pyqtSignal(object)
+    artwork_container_fail = pyqtSignal(int, object)
+    add_artwork_success = pyqtSignal(object)
+    add_artwork_fail = pyqtSignal(int, object)
+    task_status_success = pyqtSignal()
+    task_status_fail = pyqtSignal(int, object)
     
     def __init__(self, parent):
         super().__init__(parent)
@@ -24,9 +30,13 @@ class NetworkHelper(QObject):
         self.refresh_token = ""
         self.email = ""
 
-        self.settings = QSettings("Wacom", "Krita Yuify Plugin")
-
+        self.settings = QSettings("Wacom", "Krita Yuify Plugin")        
         self.nam = QtNetwork.QNetworkAccessManager()
+
+        self.poll_timer = QTimer(self)
+        self.poll_timer.setInterval(1000)
+        self.poll_timer.timeout.connect(self.poll_task_status)
+
         self.load_tokens()
 
     def login(self, email, password):
@@ -38,7 +48,7 @@ class NetworkHelper(QObject):
 
         req_body = json.dumps({"username": email, "password": password})
         self.login_reply = self.nam.post(req, QByteArray(req_body.encode()))
-        self.login_reply.finished.connect(self.handle_login_reply)
+        self.login_reply.finished.connect(self.slot_login_reply)
 
     def logout(self):
         self.main_token = ""
@@ -51,8 +61,7 @@ class NetworkHelper(QObject):
     def is_authenticated(self):
         return self.main_token != ""
 
-    def handle_login_reply(self):
-        
+    def slot_login_reply(self):        
         err = self.login_reply.error()
         
         if err == QtNetwork.QNetworkReply.NetworkError.NoError:
@@ -65,7 +74,7 @@ class NetworkHelper(QObject):
             self.save_tokens(self.email, self.main_token, self.refresh_token)
             self.login_success.emit()
         else:
-            status = int(self.login_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))            
+            status = int(self.login_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
             if status == 403:
                 bytes_string = self.login_reply.readAll()
                 error_reply = json.loads(str(bytes_string, 'utf-8'))
@@ -79,7 +88,6 @@ class NetworkHelper(QObject):
                 self.logout()
 
     def load_tokens(self):
-
         self.main_token = self.settings.value("mainToken", "")
         self.refresh_token = self.settings.value("refreshToken", "")
         self.email = self.settings.value("email", "")
@@ -91,9 +99,9 @@ class NetworkHelper(QObject):
         return self.email
     
     def save_tokens(self, email, main_token, refresh_token):
-        self.settings.setValue("mainToken", self.main_token)
-        self.settings.setValue("refreshToken", self.refresh_token)
-        self.settings.setValue("email", self.email)
+        self.settings.setValue("mainToken", main_token)
+        self.settings.setValue("refreshToken", refresh_token)
+        self.settings.setValue("email", email)
         
     def refresh_tokens(self):
         url = QUrl("%s/api/isv/users/refresh-token" % base_url)
@@ -105,7 +113,7 @@ class NetworkHelper(QObject):
         req.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "application/json")
 
         self.login_reply = self.nam.post(req, QByteArray(request_body.encode()))
-        self.login_reply.finished.connect(self.handle_login_reply)
+        self.login_reply.finished.connect(self.slot_login_reply)
 
     def yuifinder_search(self, file_path):
         url = QUrl("%s/api/public/watermark/extract-from-file" % base_url)
@@ -113,7 +121,7 @@ class NetworkHelper(QObject):
         req = QtNetwork.QNetworkRequest(url)
         
         multipart_form = QtNetwork.QHttpMultiPart(QtNetwork.QHttpMultiPart.FormDataType)
-        file_part = QtNetwork.QHttpPart();
+        file_part = QtNetwork.QHttpPart()
         file_info = QFileInfo(file_path)
 
         file_part.setHeader(QtNetwork.QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_info.fileName())
@@ -130,10 +138,9 @@ class NetworkHelper(QObject):
         self.yuifinder_search_reply = self.nam.post(req, multipart_form)
         multipart_form.setParent(self.yuifinder_search_reply)
         
-        self.yuifinder_search_reply.finished.connect(self.handle_yuifinder_search_reply)        
+        self.yuifinder_search_reply.finished.connect(self.slot_yuifinder_search_reply)
 
-    def handle_yuifinder_search_reply(self):
-        print("received yuifinder response")
+    def slot_yuifinder_search_reply(self):        
         err = self.yuifinder_search_reply.error()
 
         is_success = err == QtNetwork.QNetworkReply.NetworkError.NoError
@@ -151,5 +158,95 @@ class NetworkHelper(QObject):
         if self.yuifinder_search_reply:
             self.yuifinder_search_reply.abort()
 
-    def export(self, file_path, actions):
-        pass
+    def create_artwork_container(self, container_title):
+        url = QUrl("%s/api/isv/artwork-containers" % base_url)
+        req = QtNetwork.QNetworkRequest(url)
+        req.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "application/json")
+        req.setRawHeader(QByteArray("Authorization"), "Bearer %s" % self.main_token)
+
+        body = {}
+        body["title"] = container_title
+        
+        self.container_creation_reply = self.nam.post(req, QByteArray(json.dumps(body)))
+        self.container_creation_reply.finished.connect(self.slot_create_artwork_container)
+
+    def slot_create_artwork_container(self):
+        status = int(self.container_creation_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
+        result = json.loads(str(self.container_creation_reply.readAll(), 'utf-8'))
+
+        if status == 200:
+            self.artwork_container_success.emit(result)
+        else:
+            self.artwork_container_fail(status, result)
+
+    def add_artwork_to_container(self, container_id, file_path, c2pa_actions_json, description):
+        url = QUrl("%s/api/isv/artwork-containers/%s/artworks" % (base_url, container_id))
+        req = QtNetwork.QNetworkRequest(url)
+        req.setRawHeader(QByteArray("Authorization"), "Bearer %s" % self.main_token)
+
+        multipart_form = QtNetwork.QHttpMultiPart(QtNetwork.QHttpMultiPart.FormDataType)
+        file_part = QtNetwork.QHttpPart()        
+        file_info = QFileInfo(file_path)
+
+        file_part.setHeader(QtNetwork.QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_info.fileName())
+        file_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "image/png")
+
+        file = QFile(file_path)        
+        file.open(QIODevice.ReadOnly)
+        file_bytes = file.readAll();
+        file.close()
+
+        file_part.setBody(file_bytes)
+        multipart_form.append(file_part)
+
+        c2pa_part = QtNetwork.QHttpPart()
+        c2pa_part.setHeader(QtNetwork.QtNetworkRequest.ContentDispositionHeader, "form-data; name=\"C2PA\"")
+        c2pa_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "application/json")
+        c2pa_part.setBody(QByteArray(c2pa_actions_json))
+        multipart_form.append(c2pa_part)
+
+        desc_part = QtNetwork.QHttpPart()
+        desc_part.setHeader(QtNetwork.QtNetworkRequest.ContentDispositionHeader, "form-data; name=\"Description\"")
+        desc_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "text/plain")
+        desc_part.setBody(QByteArray(description))
+        
+        multipart_form.append(desc_part)
+
+        self.add_artwork_reply = self.nam.post(req, multipart_form)
+        multipart_form.setParent(self.add_artwork_reply)
+
+        self.add_artwork_reply.finished.connect(self.slot_add_artwork)
+
+    def slot_add_artwork(self):
+        status = int(self.add_artwork_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
+        result = json.loads(str(self.add_artwork_reply.readAll(), 'utf-8'))
+
+        if status == 200:
+            self.add_artwork_success.emit(result)
+        else:
+            self.add_artwork_fail.emit(status, result)
+    
+    def start_poll_task_status(self, task_id):
+        self.task_id = task_id
+        self.poll_timer.start()
+    
+    def poll_task_status(self):
+        url = QUrl("%s/api/isv/tasks/%s" % (base_url, self.task_id))
+        self.poll_status_task_reply = self.nam.get(url)
+        self.poll_status_task_reply.finished.connect()
+    
+    def slot_poll_task_status(self):
+        status = int(self.add_artwork_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
+        result = json.loads(str(self.add_artwork_reply.readAll(), 'utf-8'))
+
+        if status == 200:
+            result_status = result["status"]
+            if result_status == "done":
+                self.task_status_success.emit(result)
+                self.poll_timer.stop()
+            elif result_status == "failed":
+                self.task_status_fail.emit(status, result)
+                self.poll_timer.stop()
+        else:
+            self.task_status_fail.emit(status, result)
+            self.poll_timer.stop()

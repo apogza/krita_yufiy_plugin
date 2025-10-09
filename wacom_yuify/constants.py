@@ -1,3 +1,1 @@
-import os
-
 base_url = "https://stage-cri-e485850d.wacom.com"

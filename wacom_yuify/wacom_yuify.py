@@ -47,7 +47,6 @@ class WacomYuify(Extension):
             msg_box.setText("Please authenticate before exporting a document")
             msg_box.exec()
 
-
     def yufinder(self):
         self.yufinderForm = YuifinderForm(self.network_helper, None)
         self.yufinderForm.exec()
