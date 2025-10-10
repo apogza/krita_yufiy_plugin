@@ -233,7 +233,7 @@ class NetworkHelper(QObject):
     def poll_task_status(self):
         url = QUrl("%s/api/isv/tasks/%s" % (base_url, self.task_id))
         self.poll_status_task_reply = self.nam.get(url)
-        self.poll_status_task_reply.finished.connect()
+        self.poll_status_task_reply.finished.connect(self.slot_poll_task_status)
     
     def slot_poll_task_status(self):
         status = int(self.add_artwork_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
