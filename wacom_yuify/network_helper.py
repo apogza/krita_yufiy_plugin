@@ -21,8 +21,10 @@ class NetworkHelper(QObject):
     artwork_container_fail = pyqtSignal(int, object)
     add_artwork_success = pyqtSignal(object)
     add_artwork_fail = pyqtSignal(int, object)
-    task_status_success = pyqtSignal()
+    task_status_success = pyqtSignal(object)
     task_status_fail = pyqtSignal(int, object)
+    export_download_success = pyqtSignal()
+    export_download_fail = pyqtSignal(int, object)
     
     def __init__(self, parent):
         super().__init__(parent)
@@ -106,8 +108,7 @@ class NetworkHelper(QObject):
     def refresh_tokens(self):
         url = QUrl("%s/api/isv/users/refresh-token" % base_url)
         
-        request_body = json.dumps({"refreshToken": self.refresh_token})
-        print(request_body)
+        request_body = json.dumps({"refreshToken": self.refresh_token})        
 
         req = QtNetwork.QNetworkRequest(url)
         req.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "application/json")
@@ -116,10 +117,12 @@ class NetworkHelper(QObject):
         self.login_reply.finished.connect(self.slot_login_reply)
 
     def yuifinder_search(self, file_path):
-        url = QUrl("%s/api/public/watermark/extract-from-file" % base_url)
-        print(url)
+        url = QUrl("%s/api/isv/yuifinder" % base_url)
         req = QtNetwork.QNetworkRequest(url)
-        
+
+        bearer_token = "Bearer %s" % self.main_token
+        req.setRawHeader(QByteArray("Authorization".encode()), bearer_token.encode())
+
         multipart_form = QtNetwork.QHttpMultiPart(QtNetwork.QHttpMultiPart.FormDataType)
         file_part = QtNetwork.QHttpPart()
         file_info = QFileInfo(file_path)
@@ -141,15 +144,15 @@ class NetworkHelper(QObject):
         self.yuifinder_search_reply.finished.connect(self.slot_yuifinder_search_reply)
 
     def slot_yuifinder_search_reply(self):        
-        err = self.yuifinder_search_reply.error()
 
-        is_success = err == QtNetwork.QNetworkReply.NetworkError.NoError
+        status = int(self.yuifinder_search_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))        
+        is_success = status == 200
         bytes_string = self.yuifinder_search_reply.readAll()
-        
+
         if bytes_string and is_success:
             yuifinder_result = json.loads(str(bytes_string, 'utf-8'))
             self.yuifinder_search_result.emit(is_success, yuifinder_result)
-        else:
+        else:            
             self.yuifinder_search_result.emit(False, None)
 
         self.yuifinder_search_reply = None
@@ -162,12 +165,14 @@ class NetworkHelper(QObject):
         url = QUrl("%s/api/isv/artwork-containers" % base_url)
         req = QtNetwork.QNetworkRequest(url)
         req.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "application/json")
-        req.setRawHeader(QByteArray("Authorization"), "Bearer %s" % self.main_token)
+
+        bearer_token = "Bearer %s" % self.main_token
+        req.setRawHeader(QByteArray("Authorization".encode()), bearer_token.encode())
 
         body = {}
         body["title"] = container_title
         
-        self.container_creation_reply = self.nam.post(req, QByteArray(json.dumps(body)))
+        self.container_creation_reply = self.nam.post(req, QByteArray(json.dumps(body).encode()))
         self.container_creation_reply.finished.connect(self.slot_create_artwork_container)
 
     def slot_create_artwork_container(self):
@@ -179,19 +184,20 @@ class NetworkHelper(QObject):
         else:
             self.artwork_container_fail(status, result)
 
-    def add_artwork_to_container(self, container_id, file_path, c2pa_actions_json, description):
+    def add_artwork_to_container(self, container_id, file_path, c2pa_actions_json, description, type):
         url = QUrl("%s/api/isv/artwork-containers/%s/artworks" % (base_url, container_id))
         req = QtNetwork.QNetworkRequest(url)
-        req.setRawHeader(QByteArray("Authorization"), "Bearer %s" % self.main_token)
+        bearer_token = "Bearer %s" % self.main_token
+        req.setRawHeader(QByteArray("Authorization".encode()), bearer_token.encode())
 
         multipart_form = QtNetwork.QHttpMultiPart(QtNetwork.QHttpMultiPart.FormDataType)
         file_part = QtNetwork.QHttpPart()        
         file_info = QFileInfo(file_path)
-
         file_part.setHeader(QtNetwork.QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_info.fileName())
-        file_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "image/png")
+        file_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "image/%s" % type)
 
-        file = QFile(file_path)        
+        self.file_path = file_path
+        file = QFile(file_path)
         file.open(QIODevice.ReadOnly)
         file_bytes = file.readAll();
         file.close()
@@ -200,15 +206,15 @@ class NetworkHelper(QObject):
         multipart_form.append(file_part)
 
         c2pa_part = QtNetwork.QHttpPart()
-        c2pa_part.setHeader(QtNetwork.QtNetworkRequest.ContentDispositionHeader, "form-data; name=\"C2PA\"")
+        c2pa_part.setHeader(QtNetwork.QNetworkRequest.ContentDispositionHeader, "form-data; name=\"C2PA\"")
         c2pa_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "application/json")
-        c2pa_part.setBody(QByteArray(c2pa_actions_json))
+        c2pa_part.setBody(QByteArray(c2pa_actions_json.encode()))
         multipart_form.append(c2pa_part)
 
         desc_part = QtNetwork.QHttpPart()
-        desc_part.setHeader(QtNetwork.QtNetworkRequest.ContentDispositionHeader, "form-data; name=\"Description\"")
+        desc_part.setHeader(QtNetwork.QNetworkRequest.ContentDispositionHeader, "form-data; name=\"Description\"")
         desc_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "text/plain")
-        desc_part.setBody(QByteArray(description))
+        desc_part.setBody(QByteArray(description.encode()))
         
         multipart_form.append(desc_part)
 
@@ -232,21 +238,57 @@ class NetworkHelper(QObject):
     
     def poll_task_status(self):
         url = QUrl("%s/api/isv/tasks/%s" % (base_url, self.task_id))
-        self.poll_status_task_reply = self.nam.get(url)
+        req = QtNetwork.QNetworkRequest(url)
+
+        bearer_token = "Bearer %s" % self.main_token
+        req.setRawHeader(QByteArray("Authorization".encode()), bearer_token.encode())
+
+        self.poll_status_task_reply = self.nam.get(req)
         self.poll_status_task_reply.finished.connect(self.slot_poll_task_status)
     
     def slot_poll_task_status(self):
-        status = int(self.add_artwork_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
-        result = json.loads(str(self.add_artwork_reply.readAll(), 'utf-8'))
+        status = int(self.poll_status_task_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
+        result = json.loads(str(self.poll_status_task_reply.readAll(), 'utf-8'))
 
         if status == 200:
             result_status = result["status"]
+
             if result_status == "done":
+                self.poll_timer.stop()
                 self.task_status_success.emit(result)
-                self.poll_timer.stop()
+                
             elif result_status == "failed":
-                self.task_status_fail.emit(status, result)
                 self.poll_timer.stop()
+                self.task_status_fail.emit(status, result)                
         else:
-            self.task_status_fail.emit(status, result)
             self.poll_timer.stop()
+            self.task_status_fail.emit(status, result)
+                
+    def download_export(self, url):
+        url = QUrl(url)
+        req = QtNetwork.QNetworkRequest(url)
+
+        bearer_token = "Bearer %s" % self.main_token
+        req.setRawHeader(QByteArray("Authorization".encode()), bearer_token.encode())       
+
+        self.download_export_reply = self.nam.get(req)
+        self.download_export_reply.finished.connect(self.slot_download_export)
+
+    def slot_download_export(self):
+        status = int(self.add_artwork_reply.attribute(QtNetwork.QNetworkRequest.HttpStatusCodeAttribute))
+
+        if status == 200:
+            file_bytes = self.add_artwork_reply.readAll()
+
+            file = QFile(self.file_path)
+            file.open(QIODevice.ReadWrite)
+            file.write(file_bytes);
+            file.close()
+
+            self.export_download_success.emit()
+        else:
+            result = json.loads(str(self.add_artwork_reply.readAll(), 'utf-8'))
+            self.export_download_fail.emit(status, result)
+
+
+

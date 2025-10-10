@@ -44,11 +44,20 @@ class YuifinderForm(QDialog):
 
     def slot_yuifinder_search_result(self, is_success, result):
         if is_success:
-            search_object = result[0]
-                        
-            self.centralWidget.artistLabel.setText(search_object["container"]["creator"]["profile"]["artistName"])
-            self.centralWidget.didLabel.setText(search_object["container"]["did"])
-            self.centralWidget.providerLabel.setText(search_object["container"]["provider"])
+                       
+            artwork_label = result["artworkContainer"]["title"]
+            artist_name = ""
+
+            if "artistName" in result["artworkContainer"]["creator"]["profile"]:
+                artist_name = result["artworkContainer"]["creator"]["profile"]["artistName"]
+            else:
+                artist_name = result["artworkContainer"]["creator"]["profile"]["firstName"] + " " + result["artworkContainer"]["creator"]["profile"]["lastName"]
+
+            artwork_did = result["artworkContainer"]["did"]
+
+            self.centralWidget.artworkLabel.setText(artwork_label)
+            self.centralWidget.artistLabel.setText(artist_name)
+            self.centralWidget.didLabel.setText(artwork_did)
 
             self.centralWidget.yuifinderStackedWidget.setCurrentIndex(1)
         else:

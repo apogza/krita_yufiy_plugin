@@ -48,8 +48,14 @@ class WacomYuify(Extension):
             msg_box.exec()
 
     def yufinder(self):
-        self.yufinderForm = YuifinderForm(self.network_helper, None)
-        self.yufinderForm.exec()
+        if self.network_helper.is_authenticated():
+            self.yufinderForm = YuifinderForm(self.network_helper, None)
+            self.yufinderForm.exec()
+        else:
+            msg_box = QMessageBox()
+            msg_box.setIcon(QMessageBox.Icon.Critical)
+            msg_box.setText("Please authenticate before using the Yuifinder")
+            msg_box.exec()
 
     def createActions(self, window):
         action = window.createAction("WacomYuify", "Wacom Yuify", "tools/scripts")

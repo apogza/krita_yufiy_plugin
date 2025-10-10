@@ -76,6 +76,11 @@
           <layout class="QVBoxLayout" name="verticalLayout_3">
            <item>
             <widget class="QLabel" name="label">
+             <property name="font">
+              <font>
+               <italic>true</italic>
+              </font>
+             </property>
              <property name="text">
               <string>Yuifinding in progress...</string>
              </property>
@@ -96,7 +101,27 @@
          <widget class="QWidget" name="page_2">
           <layout class="QVBoxLayout" name="verticalLayout_4">
            <item>
+            <widget class="QLabel" name="artworkLabel">
+             <property name="font">
+              <font>
+               <italic>true</italic>
+              </font>
+             </property>
+             <property name="text">
+              <string/>
+             </property>
+             <property name="alignment">
+              <set>Qt::AlignCenter</set>
+             </property>
+            </widget>
+           </item>
+           <item>
             <widget class="QLabel" name="artistLabel">
+             <property name="font">
+              <font>
+               <italic>true</italic>
+              </font>
+             </property>
              <property name="text">
               <string/>
              </property>
@@ -107,16 +132,11 @@
            </item>
            <item>
             <widget class="QLabel" name="didLabel">
-             <property name="text">
-              <string/>
+             <property name="font">
+              <font>
+               <italic>true</italic>
+              </font>
              </property>
-             <property name="alignment">
-              <set>Qt::AlignCenter</set>
-             </property>
-            </widget>
-           </item>
-           <item>
-            <widget class="QLabel" name="providerLabel">
              <property name="text">
               <string/>
              </property>
