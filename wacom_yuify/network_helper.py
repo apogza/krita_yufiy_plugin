@@ -127,8 +127,10 @@ class NetworkHelper(QObject):
         file_part = QtNetwork.QHttpPart()
         file_info = QFileInfo(file_path)
 
+        type = "png" if file_info.fileName().toLower().endsWith("png") else "jpg"
+
         file_part.setHeader(QtNetwork.QNetworkRequest.ContentDispositionHeader, "form-data; name=\"file\"; filename=\"%s\"" % file_info.fileName())
-        file_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "image/png")
+        file_part.setHeader(QtNetwork.QNetworkRequest.ContentTypeHeader, "image/%s" % type)
 
         file = QFile(file_path)        
         file.open(QIODevice.ReadOnly)
@@ -289,6 +291,3 @@ class NetworkHelper(QObject):
         else:
             result = json.loads(str(self.add_artwork_reply.readAll(), 'utf-8'))
             self.export_download_fail.emit(status, result)
-
-
-

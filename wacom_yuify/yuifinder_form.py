@@ -31,7 +31,7 @@ class YuifinderForm(QDialog):
         self.setLayout(layout)        
 
     def selectFile(self):
-        self.file_path = QFileDialog.getOpenFileName(None, "Open File", "/home", "Images (*.png *.jpg)")[0]
+        self.file_path = QFileDialog.getOpenFileName(None, "Open File", QDir().homePath(), "Images (*.png *.jpg)")[0]
         
         if not self.file_path:
             return
